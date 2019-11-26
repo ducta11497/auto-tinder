@@ -51,7 +51,6 @@ class tinderAPI():
 				_user = person(i)
 				list_user_info.append(_user)
 		except Exception as e:
-			print e
 			pass
 		return list_user_info
 
