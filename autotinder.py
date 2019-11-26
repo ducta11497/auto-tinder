@@ -1,6 +1,6 @@
 import requests
-import json
 import time
+import grequests
 
 TINDER_URL = "https://api.gotinder.com"
 
@@ -13,6 +13,9 @@ class tinderAPI():
 	def __init__(self, token):
 		self._token = token
 
+	def exception(self, request, exception):
+		print "Problem: {}: {}".format(request.url, exception)
+
 	def like(self, user_id, s_number):
 		while True:
 			try:
@@ -23,6 +26,21 @@ class tinderAPI():
 				time.sleep(3)
 				pass
 		return data['match']
+
+	def like_async(self, list_user):
+		urls = []
+		for user in list_user:
+			url = '{}/like/{}?locale=en&s_number={}'.format(TINDER_URL, user._id, user.s_number)
+			urls.append(url)
+		results = grequests.map((grequests.get(u, headers={"X-Auth-Token": self._token}) for u in urls), exception_handler=self.exception, size=5)
+		count_success = 0
+		for data in results:
+			try:
+				if 'match' in data.json():
+					count_success = count_success + 1
+			except:
+				pass
+		return results, count_success
 
 	def dislike(self, user_id):
 		while True:
@@ -57,14 +75,13 @@ class tinderAPI():
 if __name__ == "__main__":
 	token = "x-auth-token"
 	api = tinderAPI(token)
-	count = 1
+
+	count = 0
 	while True:
 		list_user = api.nearby_persons()
 		if not list_user:
 			print ('Not found any persons around, finished')
 			break
-		for user in list_user:
-			match = api.like(user._id, user.s_number)
-			print ('Is matched for user id {}: {}'.format(user._id, match))
-			print ('Liked {} users'.format(count))
-			count = count + 1
+		like_list, success = api.like_async(list_user)
+		count = count + success
+		print ('Liked {} users'.format(count))
