@@ -1,3 +1,5 @@
+from gevent import monkey as curious_george
+curious_george.patch_all(thread=False, select=False)
 import requests
 import time
 import grequests
@@ -14,7 +16,7 @@ class tinderAPI():
 		self._token = token
 
 	def exception(self, request, exception):
-		print "Problem: {}: {}".format(request.url, exception)
+		print ('Problem: {}: {}'.format(request.url, exception))
 
 	def like(self, user_id, s_number):
 		while True:
@@ -72,16 +74,66 @@ class tinderAPI():
 			pass
 		return list_user_info
 
-if __name__ == "__main__":
-	token = "x-auth-token"
-	api = tinderAPI(token)
+def login_by_phone():
+	s = requests.Session()
 
+	phone_number = input('Enter your phone number: ')
+
+	print ('Sending SMS...')
+	s.post('https://api.gotinder.com/v2/auth/sms/send?auth_type=sms&locale=en', json={"phone_number":phone_number})
+
+	otp_code = input('Enter your verify code: ')
+
+	print ('Verifying...')
+	res = s.post('https://api.gotinder.com/v2/auth/sms/validate?auth_type=sms&locale=en', json={"otp_code":otp_code,"phone_number":phone_number,"is_update":False})
+
+	json_res = res.json()
+	if json_res['data']['validated']:
+		json_data = {}
+		json_data['refresh_token'] = json_res['data']['refresh_token']
+		json_data['phone_number'] = phone_number
+
+		res = s.post('https://api.gotinder.com/v2/auth/login/sms?locale=en', json=json_data)
+		json_res = res.json()
+		api_token = json_res['data']['api_token']
+		print ('Verified')
+		return api_token
+	else:
+		print ('Failed to verify, try again later')
+		return False
+
+def like_person(api_token):
+	print ('Started to like')
 	count = 0
 	while True:
-		list_user = api.nearby_persons()
+		list_user = api_token.nearby_persons()
 		if not list_user:
 			print ('Not found any persons around, finished')
 			break
-		like_list, success = api.like_async(list_user)
+		like_list, success = api_token.like_async(list_user)
 		count = count + success
 		print ('Liked {} users'.format(count))
+		
+def main():
+	while True:
+		select = input ('''Select a way to login to tinder:
+1. Input your token get on tinder.com
+2. Login by phone number
+Your choice: ''')
+		if select == '1':
+			token = input('Your token: ')
+			break
+		elif select == '2':
+			token = login_by_phone()
+			break
+		else:
+			pass
+			
+	if token and token != False:
+		api_token = tinderAPI(token)
+		like_person(api_token)
+	else:
+		return
+
+if __name__ == "__main__":
+	main()
